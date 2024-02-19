@@ -7,6 +7,7 @@ const cors = require('cors');
 
 // Import Routes
 const productsRouter = require('./routes/products');
+const orderRouter = require('./routes/order');
 //const usersRouter = require('./routes/users');
 
 
@@ -26,6 +27,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Use Routes
 app.use('/api/products', productsRouter);
+app.use('/api/orders', orderRouter);
 //app.use('/api/users', usersRouter);
 
 module.exports = app;
