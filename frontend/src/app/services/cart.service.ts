@@ -1,0 +1,379 @@
+import { HttpClient } from '@angular/common/http';
+import { Injectable } from '@angular/core';
+import { ProductService } from './product.service';
+import { OrderService } from './order.service';
+import { environment } from '../../environments/environment';
+import { CartModelPublic, CartModelServer } from '../models/cart.model';
+import { BehaviorSubject } from 'rxjs';
+import { NavigationExtras, Router } from '@angular/router';
+import { ProductModelServer } from '../models/product.model';
+import { ToastrService } from 'ngx-toastr';
+import { NgxSpinnerService } from 'ngx-spinner';
+
+@Injectable({
+  providedIn: 'root'
+})
+	
+export class CartService {
+
+	private server_url = environment.SERVER_URL;
+
+	/** 
+	 * переменная данных для хранения информации о корзине на сервере (интерфейсный сервер этого приложения в папке frontend)
+	*/
+	private cartDataServer: CartModelServer = {
+		total: 0,
+		data: [{
+			product: undefined,
+			numInCart: 0
+		}]
+	};
+
+	/** 
+	 * переменная данных для хранения информации о корзине в локальном хранилише клиента
+	*/
+	private cartDataClient: CartModelPublic = {
+		total: 0,
+		prodData: [{
+			id: 0,
+			incart: 0
+		}]
+	};
+
+	// Создадим наблюдаемые объекты, на которые компонент может подписаться:
+	cartTotal$ = new BehaviorSubject<number>(0);
+	cartData$ = new BehaviorSubject<CartModelServer>(this.cartDataServer);
+
+	constructor(private http: HttpClient,
+					private productService: ProductService,
+					private orderService: OrderService,
+					private router: Router,
+					private toast: ToastrService,
+					private spinner: NgxSpinnerService) {
+		
+		this.cartTotal$.next(this.cartDataServer.total);
+		this.cartData$.next(this.cartDataServer);
+
+		// Извлекаем информацию из хранилища если она там имеется
+		/* let info: CartModelPublic = JSON.parse(localStorage.getItem('cart') ?? '{}'); */
+		let info: CartModelPublic = JSON.parse(localStorage.getItem('cart')!);
+		/* let info = JSON.parse(localStorage.getItem('cart')!); */
+
+		if (info !== null && info !== undefined && info.prodData[0].incart !== 0) {
+
+			// перенесём данные клиента в переменную:
+			this.cartDataClient = info;
+
+			//  ппросмотрим каждую запись и поместим их в объект сервера данных корзины:
+			this.cartDataClient.prodData.forEach(p => {
+
+				this.productService.getSingleProduct(p.id).subscribe((actualProdInfo: ProductModelServer) => {
+
+					if (this.cartDataServer.data[0].numInCart === 0) {
+						this.cartDataServer.data[0].numInCart = p.incart;
+						this.cartDataServer.data[0].product = actualProdInfo;
+
+						// ОБНОВИТЬ ОБЩУЮ СУММУ
+
+						// обновим общую сумму клиента корзины из данных на сервере:
+						this.cartDataClient.total = this.cartDataServer.total;
+						localStorage.setItem('cart', JSON.stringify(this.cartDataClient));
+
+					} else {
+						// т.е. на сервере данных корзины уже есть запись
+						this.cartDataServer.data.push({
+							numInCart: p.incart,
+							product: actualProdInfo
+						});
+
+						// ОБНОВИТЬ ОБЩУЮ СУММУ
+
+						this.cartDataClient.total = this.cartDataServer.total;
+						localStorage.setItem('cart', JSON.stringify(this.cartDataClient));
+
+					}
+
+					// создадим объект данных корзины (его копию) и отправим всем кто подписан:
+					this.cartData$.next({ ...this.cartDataServer });
+
+				});
+
+			});
+			
+		}
+
+	}
+
+	AddProductToCart(id: number, quantity?: number) {
+
+		this.productService.getSingleProduct(id).subscribe(prod => {
+			// 1. Если корзина пуста
+			if (this.cartDataServer.data[0].product === undefined) {
+				this.cartDataServer.data[0].product = prod;
+				this.cartDataServer.data[0].numInCart = quantity !== undefined ? quantity : 1;
+
+				// ОБНОВИТЬ ОБЩУЮ СУММУ
+
+				// обновим данные в корзине клиента
+				this.cartDataClient.prodData[0].incart = this.cartDataServer.data[0].numInCart;
+				this.cartDataClient.prodData[0].id = prod.id;
+				this.cartDataClient.total = this.cartDataServer.total;
+
+				// обновим локальное хранилище
+				localStorage.setItem('cart', JSON.stringify(this.cartDataClient));
+
+				// разворачиваем объект данных корзины (создаём и отправляем его копию)
+				this.cartData$.next({ ...this.cartDataServer });
+
+				// ОТОБРАЗИМ ВСПЛЫВАЮЩЕЕ УВЕДОМЛЕНИЕ
+				this.toast.success(`${prod.name} добавлен в корзину`, "Товар", {
+					timeOut: 3000,
+					progressBar: true,
+					progressAnimation: 'increasing',
+					positionClass: 'toast-top-right'
+				});
+
+			} else {
+				// 2. Если в корзине есть товары
+				// найдём индекс товара в корзине:
+				let index = this.cartDataServer.data.findIndex(p => p.product!.id === prod.id);
+
+				// условие: если товар который вы добавляете уже есть в корзине
+				if (index !== -1) {
+
+					if (quantity !== undefined && quantity <= prod.quantity) {
+						
+						this.cartDataServer.data[index].numInCart = this.cartDataServer.data[index].numInCart < prod.quantity ? quantity : prod.quantity;
+
+					} else {
+						
+						this.cartDataServer.data[index].numInCart = this.cartDataServer.data[index].numInCart < prod.quantity ? this.cartDataServer.data[index].numInCart++ : prod.quantity;
+
+					}
+
+					this.cartDataClient.prodData[index].incart = this.cartDataServer.data[index].numInCart;
+
+					// ОТОБРАЗИМ ВСПЛЫВАЮЩЕЕ УВЕДОМЛЕНИЕ
+					
+				} else {
+
+					// условие: добавляемого товара нет в корзине
+					this.cartDataServer.data.push({
+						numInCart: 1,
+						product: prod
+					});
+
+					this.cartDataClient.prodData.push({
+						incart: 1,
+						id: prod.id
+					})
+
+					// ОТОБРАЗИМ ВСПЛЫВАЮЩЕЕ УВЕДОМЛЕНИЕ
+
+					// ОБНОВИТЬ ОБЩУЮ СУММУ
+
+					this.cartDataClient.total = this.cartDataServer.total;
+					localStorage.setItem('cart', JSON.stringify(this.cartDataClient));
+
+					// все компоненты подписанные на наблюдаемый объект получат новые значения для новых элементов корзины
+					this.cartData$.next({...this.cartDataServer});
+
+				}
+
+			}
+
+		 });		
+		
+	};
+
+	UpdateCartItems(index: number, increase: boolean) {
+		let data = this.cartDataServer.data[index];
+		if (increase) {
+			data.numInCart < data.product!.quantity ? data.numInCart++ : data.product!.quantity;
+			this.cartDataClient.prodData[index].incart = data.numInCart;
+
+			// ОБНОВИТЬ ОБЩУЮ СУММУ
+
+			this.cartDataClient.total = this.cartDataServer.total;
+			localStorage.setItem('cart', JSON.stringify(this.cartDataClient));
+			this.cartData$.next({ ...this.cartDataServer });
+		} else {
+
+			data.numInCart--;
+			if (data.numInCart < 1) {
+				
+				// УДАЛИТЬ ТОВАР ИЗ КОРЗИНЫ
+				this.cartData$.next({ ...this.cartDataServer });
+				
+			} else {
+				
+				this.cartData$.next({ ...this.cartDataServer });
+				this.cartDataClient.prodData[index].incart = data.numInCart;
+
+				// ОБНОВИТЬ ОБЩУЮ СУММУ
+
+			this.cartDataClient.total = this.cartDataServer.total;
+			localStorage.setItem('cart', JSON.stringify(this.cartDataClient));
+
+			}
+
+		}
+	};
+
+	DeleteProductFromCart(index: number) {
+		
+		if (window.confirm('Вы уверены, что хотите удалить товар ?')) {
+			
+			this.cartDataServer.data.splice(index, 1);
+			this.cartDataClient.prodData.splice(index, 1);
+
+			// ОБНОВИТЬ ОБЩУЮ СУММУ
+
+			this.cartDataClient.total = this.cartDataServer.total;
+
+			if (this.cartDataClient.total === 0) {
+				this.cartDataClient = {
+					total: 0,
+					prodData: [{
+						incart: 0,
+						id: 0
+					}]
+				};
+				localStorage.setItem('cart', JSON.stringify(this.cartDataClient));
+
+			} else {
+
+				localStorage.setItem('cart', JSON.stringify(this.cartDataClient));
+			}
+
+			if (this.cartDataServer.total === 0) {		
+				
+				this.cartDataServer = {
+					total: 0,
+					data: [{
+						numInCart: 0,
+						product: undefined
+					}]
+				};
+				this.cartData$.next({ ...this.cartDataServer });
+
+			} else {
+				
+				this, this.cartData$.next({ ...this.cartDataServer });
+
+			}
+
+		} else {
+			return;
+		}
+
+	}
+
+	private calculateTotal() { 
+
+		let Total = 0;
+		this.cartDataServer.data.forEach(p => {
+			const { numInCart } = p;
+			const { price } = p.product!;
+
+			Total += numInCart * price;
+		});
+
+		this.cartDataServer.total = Total;
+		this.cartTotal$.next(this.cartDataServer.total);
+
+	};
+
+	CheckoutFromCart(userId: number) { 
+
+		this.http.post<{success: boolean}>(`${this.server_url}/orders/payment`, null).subscribe((res: { success: boolean }) => { 
+
+			if (res.success) {
+
+				this.resetServerData();
+				this.http.post<OrderResponse>(`${this.server_url}/orders/new`, {
+					userId: userId,
+					products: this.cartDataClient.prodData
+				}).subscribe((data: OrderResponse) => {
+
+					this.orderService.getSingleOrder(data.order_id).then(prods => {
+
+						if (data.success) {
+						
+							// ведём дополнительные функции навигации
+							const navigationExtras: NavigationExtras = {
+
+								// поместим св-ва в объект состояния
+								state: {
+									message: data.message,
+									products: prods,
+									orderId: data.order_id,
+									total: this.cartDataClient.total
+								}
+
+							};
+
+							// УСТАНОВИМ СЧЁТЧИК СКРЫТИЯ
+
+							this.router.navigate(['/thankyou'], navigationExtras).then(p => { 
+
+								this.cartDataClient = {
+									total: 0,
+									prodData: [{
+										incart: 0,
+										id: 0
+									}]
+								}
+
+							});
+
+							this.cartTotal$.next(0);
+							localStorage.setItem('cart', JSON.stringify(this.cartDataClient));
+	
+						}
+
+					 });
+					
+					
+
+				});
+
+			}
+
+		});
+
+	};
+
+	/**
+	 * Метод сбросит данные корзины интерфейсного сервера приложения
+	 */
+	private resetServerData() {
+
+		this.cartDataServer = {
+			total: 0,
+			data: [{
+				numInCart: 0,
+				product: undefined
+			}]
+		};
+
+		// отправим новый объект, тем кто подписан
+		this.cartData$.next({ ...this.cartDataServer });
+
+	};
+	
+	
+}
+
+/** 
+ * Создадим интерфейс
+*/
+interface OrderResponse {
+	order_id: number;
+	success: boolean;
+	message: string;
+	products: [{
+		id: string,
+		numInCart: string
+	}];
+}

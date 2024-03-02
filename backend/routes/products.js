@@ -72,6 +72,7 @@ router.get('/:prodId', (req, res) => {
 			'p.title as name',
 			'p.price',
 			'p.quantity',
+			'p.description',
 			'p.image',
 			'p.images',
 			'p.id'
