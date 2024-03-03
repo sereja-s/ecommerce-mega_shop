@@ -14,6 +14,7 @@ import { HttpClientModule } from '@angular/common/http';
 import { NgxSpinnerModule } from 'ngx-spinner';
 import { ToastrModule } from 'ngx-toastr';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
+import { NgbModule } from '@ng-bootstrap/ng-bootstrap';
 
 @NgModule({
   declarations: [
@@ -29,7 +30,8 @@ import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
   imports: [
 	  BrowserModule,
 	  BrowserAnimationsModule,
-	 AppRoutingModule,
+	  AppRoutingModule,
+	  NgbModule,
 	  HttpClientModule,
 	  NgxSpinnerModule,	  
 	  ToastrModule.forRoot(),
