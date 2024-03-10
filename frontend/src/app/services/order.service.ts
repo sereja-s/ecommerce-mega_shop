@@ -13,11 +13,9 @@ export class OrderService {
 	constructor(private http: HttpClient) { }
 
 	getSingleOrder(orderId: number) {
-		return this.http.get<ProductResposeModel>(this.server_url + 'orders/' + orderId).toPromise();
+		return this.http.get<ProductResposeModel[]>(this.server_url + '/orders/' + orderId).toPromise();
 	}
 }
-
-
 
 /** 
  * Определим локальный интерфейс товара для заказа

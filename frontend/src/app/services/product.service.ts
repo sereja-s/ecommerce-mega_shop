@@ -29,7 +29,7 @@ export class ProductService {
 	} */
 
 	getAllProducts(limitOfResults=10): Observable<serverResponse> {
-		return this.http.get<serverResponse>(this.server_url + 'products', {
+		return this.http.get<serverResponse>(this.server_url + '/products', {
 		  params: {
 			 limit: limitOfResults.toString()
 		  }
@@ -37,10 +37,10 @@ export class ProductService {
 	}
 	
 	getSingleProduct(id: number): Observable<ProductModelServer> {
-		return this.http.get<ProductModelServer>(this.server_url + "products/" + id);
+		return this.http.get<ProductModelServer>(this.server_url + "/products/" + id);
 	}
 
 	getProductsFromCategory(catName: string): Observable<ProductModelServer[]> {
-		return this.http.get<ProductModelServer[]>(this.server_url + "products/category/" + catName);
+		return this.http.get<ProductModelServer[]>(this.server_url + "/products/category/" + catName);
 	}
 }

@@ -207,7 +207,8 @@ export class CartService {
     });
   }
 
-  UpdateCartItems(index: number, increase: boolean) {
+	UpdateCartItems(index: number, increase: boolean) {
+	  
     let data = this.cartDataServer.data[index];
     if (increase) {
       data.numInCart < data.product!.quantity
@@ -297,17 +298,16 @@ export class CartService {
   }
 
   CheckoutFromCart(userId: number) {
-    this.http
-      .post<{ success: boolean }>(`${this.server_url}/orders/payment`, null)
-      .subscribe((res: { success: boolean }) => {
+    this.http.post<{ success: boolean }>(`${this.server_url}/orders/payment`, null)
+		 .subscribe((res: { success: boolean }) => {
+			
         if (res.success) {
           this.resetServerData();
-          this.http
-            .post<OrderResponse>(`${this.server_url}/orders/new`, {
+          this.http.post<OrderResponse>(`${this.server_url}/orders/new`, {
               userId: userId,
-              products: this.cartDataClient.prodData,
+              products: this.cartDataClient.prodData
             })
-            .subscribe((data: OrderResponse) => {
+				.subscribe((data: OrderResponse) => {
               this.orderService.getSingleOrder(data.order_id).then((prods) => {
                 if (data.success) {
                   // ведём дополнительные функции навигации
@@ -340,12 +340,12 @@ export class CartService {
                       this.cartTotal$.next(0);
                       localStorage.setItem(
                         'cart',
-                        JSON.stringify(this.cartDataClient)
-                      );
+                        JSON.stringify(this.cartDataClient));
                     });
                 }
               });
-            });
+				});
+			  
         } else {
           this.spinner.hide().then();
           this.router.navigateByUrl('/checkout').then();
@@ -356,8 +356,54 @@ export class CartService {
             positionClass: 'toast-top-right',
           });
         }
+		  
       });
   }
+	
+  /* CheckoutFromCart(userId: number) {
+
+	// @ts-ignore
+	this.http.post(`${this.server_url}/orders/payment`, null).subscribe((res: { success: boolean }) => {
+	  if(res.success) {
+		 this.resetServerData();
+		 this.http.post(`${this.server_url}/orders/new`, {
+			userId: userId,
+			products: this.cartDataClient.prodData
+		 })
+			// @ts-ignore
+			.subscribe((data: OrderResponse) => {
+			  this.orderService.getSingleOrder(data.order_id).then(prods => {
+				 if(data.success) {
+					const navigationExtras: NavigationExtras = {
+					  state: {
+						 message: data.message,
+						 products: prods,
+						 orderId: data.order_id,
+						 total: this.cartDataClient.total
+					  }
+					};
+					this.spinner.hide().then();
+					this.router.navigate(['/thankyou'], navigationExtras).then(p => {
+					  this.cartDataClient = {prodData: [{incart: 0, id: 0}], total: 0};
+					  this.cartTotal$.next(0);
+					  localStorage.setItem('cart', JSON.stringify(this.cartDataClient));
+					});
+				 }
+			  });
+			})
+	  } else {
+		 this.spinner.hide().then();
+		 this.router.navigateByUrl('/checkout').then();
+		 this.toast.error(`Sorry, failed to book the order`, "Order Status", {
+			timeOut: 1500,
+			progressBar: true,
+			progressAnimation: 'increasing',
+			positionClass: 'toast-top-right'
+		 });
+	  }
+	})
+
+ } */
 
   /**
    * Метод сбросит данные корзины интерфейсного сервера приложения
